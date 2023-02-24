@@ -4,7 +4,7 @@
  * WC Dependency Checker
  *
  */
-class MVX_Razorpay_Checkout_Gateway_Dependencies {
+class MVX_Payex_Checkout_Gateway_Dependencies {
 
     private static $active_plugins;
 
@@ -27,10 +27,11 @@ class MVX_Razorpay_Checkout_Gateway_Dependencies {
         }
         return in_array('dc-woocommerce-multi-vendor/dc_product_vendor.php', self::$active_plugins) || array_key_exists('dc-woocommerce-multi-vendor/dc_product_vendor.php', self::$active_plugins);
     }
-    public static function others_razorpay_plugin_active_check() {
+    public static function others_payex_plugin_active_check() {
         if (!self::$active_plugins) {
             self::init();
         }
-        return in_array('woo-razorpay/woo-razorpay.php', self::$active_plugins) || array_key_exists('woo-razorpay/woo-razorpay.php', self::$active_plugins);
+        //TODO not sure need to change to what directory for payex
+        return in_array('woo-payex/woo-payex.php', self::$active_plugins) || array_key_exists('woo-payex/woo-payex.php', self::$active_plugins);
     }
 }

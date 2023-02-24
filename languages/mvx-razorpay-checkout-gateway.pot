@@ -17,26 +17,26 @@ msgstr ""
 "Language: \n"
 "Plural-Forms: nplurals=INTEGER; plural=EXPRESSION;"
 
-#: includes/mvx-razorpay-checkout-gateway-core-functions.php:18
+#: includes/mvx-payex-checkout-gateway-core-functions.php:18
 #, php-format
 msgid ""
-"%sMVX Razorpay Checkout Gateway is inactive. %s Please deactivate others "
-"razorpay plugin to bypass conflict"
+"%sMVX Payex Checkout Gateway is inactive. %s Please deactivate others "
+"payex plugin to bypass conflict"
 msgstr ""
 
-#: includes/mvx-razorpay-checkout-gateway-core-functions.php:8
+#: includes/mvx-payex-checkout-gateway-core-functions.php:8
 #, php-format
 msgid ""
-"%sMVX Razorpay Checkout Gateway is inactive.%s The %sWooCommerce plugin%s "
-"must be active for the MVX Razorpay Checkout Gateway to work. Please "
+"%sMVX Payex Checkout Gateway is inactive.%s The %sWooCommerce plugin%s "
+"must be active for the MVX Payex Checkout Gateway to work. Please "
 "%sinstall & activate WooCommerce%s"
 msgstr ""
 
-#: classes/class-mvx-razorpay-checkout-gateway-admin.php:57
+#: classes/class-mvx-payex-checkout-gateway-admin.php:57
 msgid "Account Number"
 msgstr ""
 
-#: admin/class-mvx-settings-payment-razorpay.php:51
+#: admin/class-mvx-settings-payment-payex.php:51
 msgid "Enable Split Payment"
 msgstr ""
 
@@ -45,56 +45,56 @@ msgstr ""
 msgid "https://wc-marketplace.com/"
 msgstr ""
 
-#: classes/class-mvx-gateway-razor-pay.php:58
+#: classes/class-mvx-gateway-payex-pay.php:58
 msgid "Invalid payment method"
 msgstr ""
 
-#: admin/class-mvx-settings-payment-razorpay.php:36
+#: admin/class-mvx-settings-payment-payex.php:36
 msgid "Key ID"
 msgstr ""
 
-#: admin/class-mvx-settings-payment-razorpay.php:44
+#: admin/class-mvx-settings-payment-payex.php:44
 msgid "Key Secret"
 msgstr ""
 
-#: classes/class-mvx-gateway-razor-pay.php:45
+#: classes/class-mvx-gateway-payex-pay.php:45
 msgid "New transaction has been initiated"
 msgstr ""
 
-#: classes/class-mvx-gateway-razor-pay.php:64
-msgid "Please update your Razorpay Account information to receive commission"
+#: classes/class-mvx-gateway-payex-pay.php:64
+msgid "Please update your Payex Account information to receive commission"
 msgstr ""
 
-#: classes/class-mvx-razorpay-checkout-gateway-admin.php:43
-#: classes/class-mvx-razorpay-checkout-gateway-admin.php:51
-#: classes/class-mvx-razorpay-checkout-gateway-admin.php:69
-msgid "Razorpay"
+#: classes/class-mvx-payex-checkout-gateway-admin.php:43
+#: classes/class-mvx-payex-checkout-gateway-admin.php:51
+#: classes/class-mvx-payex-checkout-gateway-admin.php:69
+msgid "Payex"
 msgstr ""
 
-#: classes/class-mvx-razorpay-checkout-gateway-admin.php:21
-#: classes/class-mvx-razorpay-checkout-gateway-admin.php:23
-msgid "Razorpay Account Id"
+#: classes/class-mvx-payex-checkout-gateway-admin.php:21
+#: classes/class-mvx-payex-checkout-gateway-admin.php:23
+msgid "Payex Account Id"
 msgstr ""
 
-#: classes/class-mvx-gateway-razor-pay.php:61
+#: classes/class-mvx-gateway-payex-pay.php:61
 msgid ""
-"Razorpay payout setting is not configured properly. Please contact site "
+"Payex payout setting is not configured properly. Please contact site "
 "administrator"
 msgstr ""
 
-#: admin/class-mvx-settings-payment-razorpay.php:83
-msgid "Razorpay Payout Settings Updated"
+#: admin/class-mvx-settings-payment-payex.php:83
+msgid "Payex Payout Settings Updated"
 msgstr ""
 
-#: classes/class-mvx-razorpay-checkout-gateway-admin.php:33
-msgid "Razorpay Route Account Id"
+#: classes/class-mvx-payex-checkout-gateway-admin.php:33
+msgid "Payex Route Account Id"
 msgstr ""
 
-#: admin/class-mvx-settings-payment-razorpay.php:33
-msgid "Razorpay setting"
+#: admin/class-mvx-settings-payment-payex.php:33
+msgid "Payex setting"
 msgstr ""
 
-#: classes/class-mvx-gateway-razor-pay.php:113
+#: classes/class-mvx-gateway-payex-pay.php:113
 #, php-format
 msgid "Total commissions earned from %1$s as at %2$s on %3$s"
 msgstr ""
@@ -105,10 +105,10 @@ msgstr ""
 
 #. Description of the plugin
 msgid ""
-"MVX Razorpay Split Checkout Gateway is a payment gateway for pay with "
+"MVX Payex Split Checkout Gateway is a payment gateway for pay with "
 "woocommerce as well as split payment with MVX multivendor marketplace."
 msgstr ""
 
 #. Name of the plugin
-msgid "MVX Razorpay Split Payment"
+msgid "MVX Payex Split Payment"
 msgstr ""

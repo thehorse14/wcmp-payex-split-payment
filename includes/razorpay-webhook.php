@@ -1,22 +1,22 @@
 <?php
+//I think not needed
+require_once __DIR__.'/../mvx-payex-checkout-gateway.php';
+require_once __DIR__.'/../payex-sdk/Payex.php';
 
-require_once __DIR__.'/../mvx-razorpay-checkout-gateway.php';
-require_once __DIR__.'/../razorpay-sdk/Razorpay.php';
-
-use Razorpay\Api\Api;
-use Razorpay\Api\Errors;
+use Payex\Api\Api;
+use Payex\Api\Errors;
 
 class RZP_Webhook
 {
     /**
-     * Instance of the razorpay payments class
-     * @var WC_Razorpay
+     * Instance of the payex payments class
+     * @var WC_Payex
      */
-    protected $razorpay;
+    protected $payex;
 
     /**
-     * API client instance to communicate with Razorpay API
-     * @var Razorpay\Api\Api
+     * API client instance to communicate with Payex API
+     * @var Payex\Api\Api
      */
     protected $api;
 
@@ -31,13 +31,13 @@ class RZP_Webhook
 
     public function __construct()
     {
-        $this->razorpay = new WC_Razorpay(false);
+        $this->payex = new WC_Payex(false);
 
-        $this->api = $this->razorpay->getRazorpayApiInstance();
+        $this->api = $this->payex->getPayexApiInstance();
     }
 
     /**
-     * Process a Razorpay Webhook. We exit in the following cases:
+     * Process a Payex Webhook. We exit in the following cases:
      * - Successful processed
      * - Exception while fetching the payment
      *
@@ -63,19 +63,19 @@ class RZP_Webhook
             return;
         }
 
-        $enabled = $this->razorpay->getSetting('enable_webhook');
+        $enabled = $this->payex->getSetting('enable_webhook');
 
         if (($enabled === 'yes') and
             (empty($data['event']) === false))
         {
             if (isset($_SERVER['HTTP_X_RAZORPAY_SIGNATURE']) === true)
             {
-                $razorpayWebhookSecret = $this->razorpay->getSetting('webhook_secret');
+                $payexWebhookSecret = $this->payex->getSetting('webhook_secret');
 
                 //
                 // If the webhook secret isn't set on wordpress, return
                 //
-                if (empty($razorpayWebhookSecret) === true)
+                if (empty($payexWebhookSecret) === true)
                 {
                     return;
                 }
@@ -84,14 +84,14 @@ class RZP_Webhook
                 {
                     $this->api->utility->verifyWebhookSignature($post,
                                                                 $_SERVER['HTTP_X_RAZORPAY_SIGNATURE'],
-                                                                $razorpayWebhookSecret);
+                                                                $payexWebhookSecret);
                 }
                 catch (Errors\SignatureVerificationError $e)
                 {
                     $log = array(
                         'message'   => $e->getMessage(),
                         'data'      => $data,
-                        'event'     => 'razorpay.wc.signature.verify_failed'
+                        'event'     => 'payex.wc.signature.verify_failed'
                     );
 
                     error_log(json_encode($log));
@@ -167,9 +167,9 @@ class RZP_Webhook
             return;
         }
 
-        $razorpayPaymentId = $data['payload']['payment']['entity']['id'];
+        $payexPaymentId = $data['payload']['payment']['entity']['id'];
 
-        $payment = $this->getPaymentEntity($razorpayPaymentId, $data);
+        $payment = $this->getPaymentEntity($payexPaymentId, $data);
 
         $amount = $this->getOrderAmountAsInteger($order);
 
@@ -181,7 +181,7 @@ class RZP_Webhook
             $success = true;
         }
         else if (($payment['status'] === 'authorized') and
-                 ($this->razorpay->getSetting('payment_action') === WC_Razorpay::CAPTURE))
+                 ($this->payex->getSetting('payment_action') === WC_Payex::CAPTURE))
         {
             //
             // If the payment is only authorized, we capture it
@@ -200,7 +200,7 @@ class RZP_Webhook
                 //
                 $log = array(
                     'message'         => $e->getMessage(),
-                    'payment_id'      => $razorpayPaymentId,
+                    'payment_id'      => $payexPaymentId,
                     'event'           => $data['event']
                 );
 
@@ -209,7 +209,7 @@ class RZP_Webhook
                 //
                 // We re-fetch the payment entity and check if the payment is captured now
                 //
-                $payment = $this->getPaymentEntity($razorpayPaymentId, $data);
+                $payment = $this->getPaymentEntity($payexPaymentId, $data);
 
                 if ($payment['status'] === 'captured')
                 {
@@ -218,7 +218,7 @@ class RZP_Webhook
             }
         }
 
-        $this->razorpay->updateOrder($order, $success, $errorMessage, $razorpayPaymentId, null, true);
+        $this->payex->updateOrder($order, $success, $errorMessage, $payexPaymentId, null, true);
 
         // Graceful exit since payment is now processed.
         exit;
@@ -250,11 +250,11 @@ class RZP_Webhook
             return;
         }
 
-        $razorpayPaymentId = $data['payload']['payment']['entity']['id'];
+        $payexPaymentId = $data['payload']['payment']['entity']['id'];
         $virtualAccountId  = $data['payload']['virtual_account']['entity']['id'];
         $amountPaid        = (int) $data['payload']['virtual_account']['entity']['amount_paid'];
 
-        $payment = $this->getPaymentEntity($razorpayPaymentId, $data);
+        $payment = $this->getPaymentEntity($payexPaymentId, $data);
 
         $amount = $this->getOrderAmountAsInteger($order);
 
@@ -266,7 +266,7 @@ class RZP_Webhook
             $success = true;
         }
         else if (($payment['status'] === 'authorized') and $amountPaid === $amount and
-                 ($this->razorpay->getSetting('payment_action') === WC_Razorpay::CAPTURE))
+                 ($this->payex->getSetting('payment_action') === WC_Payex::CAPTURE))
         {
             //
             // If the payment is only authorized, we capture it
@@ -285,7 +285,7 @@ class RZP_Webhook
                 //
                 $log = array(
                     'message'         => $e->getMessage(),
-                    'payment_id'      => $razorpayPaymentId,
+                    'payment_id'      => $payexPaymentId,
                     'event'           => $data['event']
                 );
 
@@ -294,7 +294,7 @@ class RZP_Webhook
                 //
                 // We re-fetch the payment entity and check if the payment is captured now
                 //
-                $payment = $this->getPaymentEntity($razorpayPaymentId, $data);
+                $payment = $this->getPaymentEntity($payexPaymentId, $data);
 
                 if ($payment['status'] === 'captured')
                 {
@@ -303,23 +303,23 @@ class RZP_Webhook
             }
         }
 
-        $this->razorpay->updateOrder($order, $success, $errorMessage, $razorpayPaymentId, $virtualAccountId, true);
+        $this->payex->updateOrder($order, $success, $errorMessage, $payexPaymentId, $virtualAccountId, true);
 
         // Graceful exit since payment is now processed.
         exit;
     }
 
-    protected function getPaymentEntity($razorpayPaymentId, $data)
+    protected function getPaymentEntity($payexPaymentId, $data)
     {
         try
         {
-            $payment = $this->api->payment->fetch($razorpayPaymentId);
+            $payment = $this->api->payment->fetch($payexPaymentId);
         }
         catch (Exception $e)
         {
             $log = array(
                 'message'         => $e->getMessage(),
-                'payment_id'      => $razorpayPaymentId,
+                'payment_id'      => $payexPaymentId,
                 'event'           => $data['event']
             );
 
@@ -366,11 +366,11 @@ class RZP_Webhook
             return;
         }
 
-        $razorpayPaymentId = $data['payload']['refund']['entity']['payment_id'];
+        $payexPaymentId = $data['payload']['refund']['entity']['payment_id'];
 
         $refundId = $data['payload']['refund']['entity']['id'];
 
-        $payment = $this->getPaymentEntity($razorpayPaymentId, $data);
+        $payment = $this->getPaymentEntity($payexPaymentId, $data);
 
         //
         // Order entity should be sent as part of the webhook payload
@@ -429,7 +429,7 @@ class RZP_Webhook
             //
             $log = array(
                 'message' => $e->getMessage(),
-                'payment_id' => $razorpayPaymentId,
+                'payment_id' => $payexPaymentId,
                 'event' => $data['event']
             );
 

@@ -1,5 +1,5 @@
 (function() {
-  var data = razorpay_wc_checkout_vars;
+  var data = payex_wc_checkout_vars;
   if(data === 'checkoutForm') {
     document.getElementById("checkoutForm").submit();
   } else {
@@ -18,28 +18,28 @@
     // Payment was closed without handler getting called
     data.modal = {
       ondismiss: function() {
-        setDisabled('btn-razorpay', false);
+        setDisabled('btn-payex', false);
       },
     };
 
     data.handler = function(payment) {
-      setDisabled('btn-razorpay-cancel');
-      var successMsg = document.getElementById('msg-razorpay-success');
+      setDisabled('btn-payex-cancel');
+      var successMsg = document.getElementById('msg-payex-success');
       successMsg.style.display = 'block';
-      document.getElementById('razorpay_payment_id').value =
-        payment.razorpay_payment_id;
-      document.getElementById('razorpay_signature').value =
-        payment.razorpay_signature;
-      document.razorpayform.submit();
+      document.getElementById('payex_payment_id').value =
+        payment.payex_payment_id;
+      document.getElementById('payex_signature').value =
+        payment.payex_signature;
+      document.payexform.submit();
     };
 
-    var razorpayCheckout = new Razorpay(data);
+    var payexCheckout = new Payex(data);
 
     // global method
     function openCheckout() {
       // Disable the pay button
-      setDisabled('btn-razorpay');
-      razorpayCheckout.open();
+      setDisabled('btn-payex');
+      payexCheckout.open();
     }
 
     function addEvent(element, evnt, funct) {
@@ -49,11 +49,11 @@
     }
 
     if (document.readyState === 'complete') {
-      addEvent(document.getElementById('btn-razorpay'), 'click', openCheckout);
+      addEvent(document.getElementById('btn-payex'), 'click', openCheckout);
       openCheckout();
     } else {
       document.addEventListener('DOMContentLoaded', function() {
-        addEvent(document.getElementById('btn-razorpay'), 'click', openCheckout);
+        addEvent(document.getElementById('btn-payex'), 'click', openCheckout);
         openCheckout();
       });
     }

@@ -1,10 +1,10 @@
 <?php
 
-namespace Razorpay\Woocommerce\Errors;
+namespace Payex\Woocommerce\Errors;
 
-require_once __DIR__.'/../../razorpay-sdk/Razorpay.php';
+require_once __DIR__.'/../../payex-sdk/Payex.php';
 
-use Razorpay\Api\Errors as ApiErrors;
+use Payex\Api\Errors as ApiErrors;
 
 class ErrorCode extends ApiErrors\ErrorCode
 {
