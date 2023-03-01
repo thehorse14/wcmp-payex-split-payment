@@ -3,9 +3,9 @@
  * Plugin Name: MVX Payex Split Payment
  * Plugin URI: https://wc-marketplace.com/addons/
  * Description: MVX Payex Split Checkout Gateway is a payment gateway for pay with woocommerce as well as split payment with MVX multivendor marketplace.
- * Author: WC Marketplace
+ * Author: Payex
  * Version: 1.0.1
- * Author URI: https://wc-marketplace.com/
+ * Author URI: https://payex.io/
  * Text Domain: mvx-payex-checkout-gateway
  * Domain Path: /languages/
  */
@@ -18,7 +18,7 @@ if ( ! defined( 'ABSPATH' ) )
 if (!class_exists('MVX_Payex_Checkout_Gateway_Dependencies')) {
     require_once 'classes/class-mvx-payex-checkout-gateway-dependencies.php';
 }
-require_once 'includes/mvx-payex-checkout-gateway-core-functions.php';
+
 require_once 'mvx-payex-checkout-gateway-config.php';
 
 if (!defined('MVX_PAYEX_CHECKOUT_GATEWAY_PLUGIN_TOKEN')) {

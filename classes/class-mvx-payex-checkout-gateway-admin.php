@@ -1,5 +1,5 @@
 <?php
-//NOT sure which page is this
+
 class MVX_Payex_Checkout_Gateway_Admin {
 
     public function __construct() {

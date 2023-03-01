@@ -6,8 +6,16 @@
 // use Payex\Api\Api;
 // use Payex\Api\Errors;
 
+const PAYEX_AUTH_CODE_SUCCESS = '00';
+const PAYEX_AUTH_CODE_PENDING = '09';
+const PAYEX_AUTH_CODE_PENDING_2 = '99';
+const DIRECT_DEBIT = 'Direct Debit';
+const AUTO_DEBIT = 'Auto Debit';
+const DIRECT_DEBIT_AUTHORIZATION = 'Mandate - Authorization';
+const DIRECT_DEBIT_APPROVAL = 'Mandate - Approval';
+const AUTO_DEBIT_AUTHORIZATION = 'Auto Debit - Authorization';
+
 add_action('plugins_loaded', 'woocommerce_payex_init', 0);
-add_action('admin_post_nopriv_rzp_wc_webhook', 'payex_webhook_init', 10);
 
 function woocommerce_payex_init()
 {
@@ -18,21 +26,15 @@ function woocommerce_payex_init()
 
     class WC_Payex extends WC_Payment_Gateway
     {
-        // This one stores the WooCommerce Order Id
-        const SESSION_KEY                    = 'payex_wc_order_id';
-        const PAYEX_PAYMENT_ID            = 'payex_payment_id';
-        const PAYEX_ORDER_ID              = 'payex_order_id';
-        const PAYEX_SIGNATURE             = 'payex_signature';
-        const PAYEX_WC_FORM_SUBMIT        = 'payex_wc_form_submit';
-
-        const INR                            = 'INR';
-        const CAPTURE                        = 'capture';
-        const AUTHORIZE                      = 'authorize';
-        const WC_ORDER_ID                    = 'woocommerce_order_id';
-
-        const DEFAULT_LABEL                  = 'OnlineBanking/Cards/EWallets/Instalments/Subscription';
-        const DEFAULT_DESCRIPTION            = 'Accept Online Banking, Cards, EWallets, Instalments, and Subscription payments using Payex';
-        const DEFAULT_SUCCESS_MESSAGE        = 'Thank you for shopping with us. Your account has been charged and your transaction is successful. We will be processing your order soon.';
+        const API_URL = 'https://api.payex.io/';
+        const API_URL_SANDBOX = 'https://beta-payexapi.azurewebsites.net/';
+        const API_GET_TOKEN_PATH = 'api/Auth/Token';
+        const API_PAYMENT_FORM = 'api/v1/PaymentIntents';
+        const API_MANDATE_FORM = 'api/v1/Mandates';
+        const API_COLLECTIONS = 'api/v1/Mandates/Collections';
+        const API_CHARGES = 'api/v1/Transactions/Charges';
+        const API_QUERY = 'api/v1/Transactions';
+        const HOOK_NAME = 'payex_hook';
 
         protected $visibleSettings = array(
             'enabled',
@@ -101,16 +103,6 @@ function woocommerce_payex_init()
             return $this->get_option($key);
         }
 
-        protected function getCustomOrdercreationMessage()
-        {
-            $message =  $this->getSetting('order_success_message');
-            if (isset($message) === false)
-            {
-                $message = STATIC::DEFAULT_SUCCESS_MESSAGE;
-            }
-            return $message;
-        }
-
         /**
          * @param boolean $hooks Whether or not to
          *                       setup the hooks on
@@ -118,13 +110,11 @@ function woocommerce_payex_init()
          */
         public function __construct($hooks = true)
         {
-            $this->icon =  "https://cdn.razorpay.com/static/assets/logo/payment.svg"; //TODO
+            $this->icon =  "https://payexpublic.blob.core.windows.net/storage/payex_woocommerce.jpg";
 
             $this->init_form_fields();
             $this->init_settings();
 
-            // TODO: This is hacky, find a better way to do this
-            // See mergeSettingsWithParentPlugin() in subscriptions for more details.
             if ($hooks)
             {
                 $this->initHooks();
@@ -135,21 +125,15 @@ function woocommerce_payex_init()
 
         protected function initHooks()
         {
-            add_action('init', array(&$this, 'check_payex_response'));
-
-            add_action('woocommerce_receipt_' . $this->id, array($this, 'receipt_page'));
-
-            add_action('woocommerce_api_' . $this->id, array($this, 'check_payex_response'));
-
-            $cb = array($this, 'process_admin_options');
-
-            if (version_compare(WOOCOMMERCE_VERSION, '2.0.0', '>='))
+            add_action('woocommerce_update_options_payment_gateways_' . $this->id, array( $this, 'process_admin_options' ));
+            add_action('woocommerce_thankyou_' . $this->id, array(&$this, 'redirect'));
+            add_action('woocommerce_api_wc_payex_gateway', array(&$this, 'webhook'));
+            if (class_exists('WC_Subscriptions_Order'))
             {
-                add_action("woocommerce_update_options_payment_gateways_{$this->id}", $cb);
-            }
-            else
-            {
-                add_action('woocommerce_update_options_payment_gateways', $cb);
+                add_action('woocommerce_scheduled_subscription_payment_' . $this->id, array( $this, 'scheduled_subscription_payment' ), 10, 2);
+                add_action('woocommerce_subscription_failing_payment_method_updated_' . $this->id, array( $this, 'update_failing_payment_method' ), 10, 2);
+                add_action('wcs_resubscribe_order_created', array( $this, 'delete_resubscribe_meta' ), 10);
+                add_action('wcs_renewal_order_created', array( $this, 'delete_renewal_meta' ), 10);
             }
         }
 
@@ -229,334 +213,11 @@ function woocommerce_payex_init()
         }
 
         /**
-         * Receipt Page
-         * @param string $orderId WC Order Id
-         **/
-        function receipt_page($orderId)
-        {
-            echo $this->generate_payex_form($orderId);
-        }
-
-        /**
-         * Returns key to use in session for storing Payex order Id
-         * @param  string $orderId Payex Order Id
-         * @return string Session Key
-         */
-        protected function getOrderSessionKey($orderId)
-        {
-            return self::PAYEX_ORDER_ID . $orderId;
-        }
-
-        /**
-         * Given a order Id, find the associated
-         * Payex Order from the session and verify
-         * that is is still correct. If not found
-         * (or incorrect), create a new Payex Order
-         *
-         * @param  string $orderId Order Id
-         * @return mixed Payex Order Id or Exception
-         */
-        protected function createOrGetPayexOrderId($orderId)
-        {
-            global $woocommerce;
-
-            $sessionKey = $this->getOrderSessionKey($orderId);
-
-            $create = false;
-
-            try
-            {
-                $payexOrderId = $woocommerce->session->get($sessionKey);
-
-                // If we don't have an Order
-                // or the if the order is present in session but doesn't match what we have saved
-                if (($payexOrderId === null) or
-                    (($payexOrderId and ($this->verifyOrderAmount($payexOrderId, $orderId)) === false)))
-                {
-                    $create = true;
-                }
-                else
-                {
-                    return $payexOrderId;
-                }
-            }
-            // Order doesn't exist or verification failed
-            // So try creating one
-            catch (Exception $e)
-            {
-                $create = true;
-            }
-
-            if ($create)
-            {
-                try
-                {
-                    return $this->createPayexOrderId($orderId, $sessionKey);
-                }
-                // For the bad request errors, it's safe to show the message to the customer.
-                catch (Errors\BadRequestError $e)
-                {
-                    return $e;
-                }
-                // For any other exceptions, we make sure that the error message
-                // does not propagate to the front-end.
-                catch (Exception $e)
-                {
-                    return new Exception("Payment failed");
-                }
-            }
-        }
-
-        /**
-         * Returns redirect URL post payment processing
-         * @return string redirect URL
-         */
-        private function getRedirectUrl()
-        {
-            return add_query_arg( 'wc-api', $this->id, trailingslashit( get_home_url() ) );
-        }
-
-        /**
-         * Specific payment parameters to be passed to checkout
-         * for payment processing
-         * @param  string $orderId WC Order Id
-         * @return array payment params
-         */
-        protected function getPayexPaymentParams($orderId)
-        {
-            $payexOrderId = $this->createOrGetPayexOrderId($orderId);
-
-            if ($payexOrderId === null)
-            {
-                throw new Exception('PAYEX ERROR: Payex API could not be reached');
-            }
-            else if ($payexOrderId instanceof Exception)
-            {
-                $message = $payexOrderId->getMessage();
-
-                throw new Exception("PAYEX ERROR: Order creation failed with the message: '$message'.");
-            }
-
-            return [
-                'order_id'  =>  $payexOrderId
-            ];
-        }
-
-        /**
-         * Generate payex button link
-         * @param string $orderId WC Order Id
-         **/
-        public function generate_payex_form($orderId)
-        {
-            $order = new WC_Order($orderId);
-
-            try
-            {
-                $params = $this->getPayexPaymentParams($orderId);
-            }
-            catch (Exception $e)
-            {
-                return $e->getMessage();
-            }
-
-            $checkoutArgs = $this->getCheckoutArguments($order, $params);
-
-            $html = '<p>'.__('Thank you for your order, please click the button below to pay with Payex.', $this->id).'</p>';
-
-            $html .= $this->generateOrderForm($checkoutArgs);
-
-            return $html;
-        }
-
-        /**
-         * default parameters passed to checkout
-         * @param  WC_Order $order WC Order
-         * @return array checkout params
-         */
-        private function getDefaultCheckoutArguments($order)
-        {
-            global $MVX_Payex_Checkout_Gateway;
-            $callbackUrl = $this->getRedirectUrl();
-
-            $orderId = $order->get_order_number();
-
-            $productinfo = "Order $orderId";
-            return array(
-                'key'          => $this->getSetting('key_id'),
-                'name'         => get_bloginfo('name'),
-                'currency'     => self::INR,
-                'description'  => $productinfo,
-                'notes'        => array(
-                    'woocommerce_order_id' => $orderId
-                ),
-                'callback_url' => $callbackUrl,
-                'prefill'      => $this->getCustomerInfo($order),
-                '_'            => array(
-                    'integration'                   => 'woocommerce',
-                    'integration_version'           => $MVX_Payex_Checkout_Gateway->version,
-                    'integration_parent_version'    => WOOCOMMERCE_VERSION,
-                ),
-            );
-        }
-
-        /**
-         * @param  WC_Order $order
-         * @return string currency
-         */
-        private function getOrderCurrency($order)
-        {
-            if (version_compare(WOOCOMMERCE_VERSION, '2.7.0', '>='))
-            {
-                return $order->get_currency();
-            }
-
-            return $order->get_order_currency();
-        }
-
-        /**
-         * Returns array of checkout params
-         */
-        private function getCheckoutArguments($order, $params)
-        {
-            $args = $this->getDefaultCheckoutArguments($order);
-
-            $currency = $this->getOrderCurrency($order);
-
-            // The list of valid currencies is at https://payex.freshdesk.com/support/solutions/articles/11000065530-what-currencies-does-payex-support-
-
-            $args = array_merge($args, $params);
-
-            return $args;
-        }
-
-        public function getCustomerInfo($order)
-        {
-            if (version_compare(WOOCOMMERCE_VERSION, '2.7.0', '>='))
-            {
-                $args = array(
-                    'name'    => $order->get_billing_first_name() . ' ' . $order->get_billing_last_name(),
-                    'email'   => $order->get_billing_email(),
-                    'contact' => $order->get_billing_phone(),
-                );
-            }
-            else
-            {
-                $args = array(
-                    'name'    => $order->billing_first_name . ' ' . $order->billing_last_name,
-                    'email'   => $order->billing_email,
-                    'contact' => $order->billing_phone,
-                );
-            }
-
-            return $args;
-        }
-
-        public function create_transaction_from_order($orderId = '') {
-            $receivers = array();
-            if(MVX_Payex_Checkout_Gateway_Dependencies::mvx_active_check()) {
-                $suborders_list = get_mvx_suborders( $orderId ); 
-                if( $suborders_list ) {
-                    foreach( $suborders_list as $suborder ) {
-                        $vendor = get_mvx_vendor( get_post_field( 'post_author', $suborder->get_id() ) );
-                        $vendor_payment_method = get_user_meta( $vendor->id, '_vendor_payment_mode', true );
-                        $vendor_payex_account_id = get_user_meta( $vendor->id, '_vendor_payex_account_id', true );
-                        $vendor_payment_method_check = $vendor_payment_method == 'payex' ? true : false;
-                        $payex_enabled = apply_filters('mvx_payex_enabled', $vendor_payment_method_check);
-                        if ( $payex_enabled && $vendor_payex_account_id ) {
-                            $vendor_order = mvx_get_order( $suborder->get_id() );
-                            $vendor_commission = round( $vendor_order->get_commission_total( 'edit' ), 2 );
-                            $commission_id = get_post_meta($suborder->get_id(), '_commission_id', true) ? get_post_meta($suborder->get_id(), '_commission_id') : array();
-                            if ($vendor_commission > 0 && $commission_id) {
-                                $receivers[$vendor->id] = $commission_id;
-                            }
-                        }
-                    }
-                }
-            }
-            return $receivers;
-        }
-
-        private function getOrderCreationData($orderId)
-        {
-            $order = new WC_Order($orderId);
-
-            $data = array(
-                'receipt'         => $orderId,
-                'amount'          => (int) round($order->get_total() * 100),
-                'currency'        => $this->getOrderCurrency($order),
-                'payment_capture' => ($this->getSetting('payment_action') === self::AUTHORIZE) ? 0 : 1,
-                'app_offer'       => ($order->get_discount_total() > 0) ? 1 : 0,
-                'notes'           => array(
-                    self::WC_ORDER_ID  => (string) $orderId,
-                ),
-            );
-
-            if (MVX_Payex_Checkout_Gateway_Dependencies::mvx_active_check()) {
-                $is_split = get_mvx_vendor_settings('is_split', 'payment_payex');
-                if (!empty($is_split)) {
-                    $payment_distribution_list = $this->generate_payment_distribution_list($orderId);
-                    if( isset( $payment_distribution_list['transfers'] ) && !empty( $payment_distribution_list['transfers'] ) && count( $payment_distribution_list['transfers'] ) > 0 ) {
-                        $data['transfers'] = $payment_distribution_list['transfers'];
-                    }
-                }
-            }
-            
-            return $data;
-        }
-
-        public function generate_payment_distribution_list($order) {
-            $args = array();
-            $receivers = array();
-            $total_vendor_commission = 0;
-            if(MVX_Payex_Checkout_Gateway_Dependencies::mvx_active_check()) {
-                $suborders_list = get_mvx_suborders( $order ); 
-                if( $suborders_list ) {
-                    foreach( $suborders_list as $suborder ) {
-                        $vendor = get_mvx_vendor( get_post_field( 'post_author', $suborder->get_id() ) );
-                        $vendor_payment_method = get_user_meta( $vendor->id, '_vendor_payment_mode', true );
-                        $vendor_payex_account_id = get_user_meta( $vendor->id, '_vendor_payex_account_id', true );
-                        $vendor_payment_method_check = $vendor_payment_method == 'payex' ? true : false;
-                        $payex_enabled = apply_filters('mvx_payex_enabled', $vendor_payment_method_check);
-                        if ( $payex_enabled && $vendor_payex_account_id ) {
-                            $vendor_order = mvx_get_order( $suborder->get_id() );
-                            $vendor_commission = round( $vendor_order->get_commission_total( 'edit' ), 2 );
-                            if ($vendor_commission > 0) {
-                                $receivers[] = array(
-                                    'account'       => $vendor_payex_account_id,
-                                    'amount'        => (float) $vendor_commission * 100,
-                                    'currency'      => get_woocommerce_currency(),
-                                );
-                            }
-                        }
-                    }
-                }
-            }
-            $args['transfers'] = $receivers;
-            return $args;
-        }
-
-        /**
-         * Gets the Order Key from the Order
-         * for all WC versions that we suport
-         */
-        protected function getOrderKey($order)
-        {
-            $orderKey = null;
-
-            if (version_compare(WOOCOMMERCE_VERSION, '3.0.0', '>='))
-            {
-                return $order->get_order_key();
-            }
-
-            return $order->order_key;
-        }
-
-        /**
          * Process the payment and return the result
          **/
         function process_payment($order_id)
         {
-            global $woocommerce;
+            global $woocommerce, $MVX;
 
             // we need it to get any order details.
             $order = wc_get_order($order_id);
@@ -572,13 +233,17 @@ function woocommerce_payex_init()
             if ($token)
             {
                 // generate payex payment link.
+                $split_list = array();
+                if (MVX_Payex_Checkout_Gateway_Dependencies::mvx_active_check()) {
+                    $split_list = $this->create_transaction_from_order($order_id);
+                }
                 if (class_exists('WC_Subscriptions_Order') && WC_Subscriptions_Order::order_contains_subscription($order_id))
                 {
                     $payment_link = $this->get_payex_mandate_link($url, $order, WC()->api_request_url(get_class($this)) , $token);
                 }
                 else
                 {
-                    $payment_link = $this->get_payex_payment_link($url, $order, WC()->api_request_url(get_class($this)) , $token);
+                    $payment_link = $this->get_payex_payment_link($url, $order, WC()->api_request_url(get_class($this)) , $token, $split_list);
                 }
                 
                 wp_schedule_single_event( time() + (10 * MINUTE_IN_SECONDS), 'woocommerce_query_payex_payment_status', array( $order_id ) );
@@ -596,208 +261,48 @@ function woocommerce_payex_init()
             }
         }
 
-        /**
-         * Check for valid payex server callback
-         **/
-        function check_payex_response()
+                /**
+         * Webhook
+         */
+        public function webhook()
         {
-            global $woocommerce;
-
-            $orderId = $woocommerce->session->get(self::SESSION_KEY);
-            $order = new WC_Order($orderId);
-
-            //
-            // If the order has already been paid for
-            // redirect user to success page
-            //
-            if ($order->needs_payment() === false)
-            {
-                $this->redirectUser($order);
-            }
-
-            $payexPaymentId = null;
-
-            if ($orderId  and !empty($_POST[self::PAYEX_PAYMENT_ID]))
-            {
-                $error = "";
-                $success = false;
-
-                try
+            $verified = $this->verify_payex_response($_POST); // phpcs:ignore
+            if ($verified && isset($_POST['reference_number']) && 
+                (isset($_POST['auth_code']) || isset($_POST['approval_status']) || isset($_POST['collection_status'])))
+            { 
+                // phpcs:ignore
+                if (isset($_POST['collection_status']))
                 {
-                    $this->verifySignature($orderId);
-                    $success = true;
-                    $payexPaymentId = sanitize_text_field($_POST[self::PAYEX_PAYMENT_ID]);
+                    $order = wc_get_order(sanitize_text_field(wp_unslash($_POST['collection_reference_number']))); // phpcs:ignore
+                    $response_code = sanitize_text_field(wp_unslash($_POST['collection_status'])); // phpcs:ignore
                 }
-                catch (Errors\SignatureVerificationError $e)
+                else if (isset($_POST['approval_status']))
                 {
-                    $error = 'WOOCOMMERCE_ERROR: Payment to Payex Failed. ' . $e->getMessage();
-                }
-            }
-            else
-            {
-                if($_POST[self::PAYEX_WC_FORM_SUBMIT] ==1)
-                {
-                    $success = false;
-                    $error = 'Customer cancelled the payment';
+                    $order = wc_get_order(sanitize_text_field(wp_unslash($_POST['reference_number']))); // phpcs:ignore
+                    $response_code = sanitize_text_field(wp_unslash($_POST['approval_status'])); // phpcs:ignore
                 }
                 else
                 {
-                    $success = false;
-                    $error = "Payment Failed.";
+                    $order = wc_get_order(sanitize_text_field(wp_unslash($_POST['reference_number']))); // phpcs:ignore
+                    $response_code = sanitize_text_field(wp_unslash($_POST['auth_code'])); // phpcs:ignore
                 }
 
-                $this->handleErrorCase($order);
-                $this->updateOrder($order, $success, $error, $payexPaymentId, null);
+                $txn_id = sanitize_text_field(wp_unslash($_POST['txn_id']));
+                $txn_type = sanitize_text_field(wp_unslash($_POST['txn_type']));
+                $mandate_number = sanitize_text_field(wp_unslash($_POST['mandate_reference_number']));
 
-                wp_redirect(wc_get_checkout_url());
-                exit;
+                $this->complete_payment($order, $txn_id, $mandate_number, $txn_type, $response_code);
             }
-
-            $this->updateOrder($order, $success, $error, $payexPaymentId, null);
-
-            $this->redirectUser($order);
-        }
-
-        protected function redirectUser($order)
-        {
-            $redirectUrl = $this->get_return_url($order);
-
-            wp_redirect($redirectUrl);
-            exit;
-        }
-
-        protected function verifySignature($orderId)
-        {
-            global $woocommerce;
-
-            $api = $this->getPayexApiInstance();
-
-            $attributes = array(
-                self::PAYEX_PAYMENT_ID => $_POST[self::PAYEX_PAYMENT_ID],
-                self::PAYEX_SIGNATURE  => $_POST[self::PAYEX_SIGNATURE],
-            );
-
-            $sessionKey = $this->getOrderSessionKey($orderId);
-            $attributes[self::PAYEX_ORDER_ID] = $woocommerce->session->get($sessionKey);
-
-            $api->utility->verifyPaymentSignature($attributes);
-        }
-
-        protected function getErrorMessage($orderId)
-        {
-            // We don't have a proper order id
-            if ($orderId !== null)
-            {
-                $message = 'An error occured while processing this payment';
-            }
-            if (isset($_POST['error']) === true)
-            {
-                $error = $_POST['error'];
-
-                $description = htmlentities($error['description']);
-                $code = htmlentities($error['code']);
-
-                $message = 'An error occured. Description : ' . $description . '. Code : ' . $code;
-
-                if (isset($error['field']) === true)
-                {
-                    $fieldError = htmlentities($error['field']);
-                    $message .= 'Field : ' . $fieldError;
-                }
-            }
-            else
-            {
-                $message = 'An error occured. Please contact administrator for assistance';
-            }
-
-            return $message;
         }
 
         /**
-         * Modifies existing order and handles success case
-         *
-         * @param $success, & $order
+         * Redirect page
          */
-        public function updateOrder(& $order, $success, $errorMessage, $payexPaymentId, $virtualAccountId = null, $webhook = false)
+        public function redirect($order_id)
         {
-            global $woocommerce;
-
-            $orderId = $order->get_order_number();
-
-            if (($success === true) and ($order->needs_payment() === true))
-            {
-                $this->msg['message'] = $this->getCustomOrdercreationMessage() . "&nbsp; Order Id: $orderId";
-                $this->msg['class'] = 'success';
-
-                $order->payment_complete($payexPaymentId);
-                $order->add_order_note("Payex payment successful <br/>Payex Id: $payexPaymentId");
-
-                if($virtualAccountId != null)
-                {
-                    $order->add_order_note("Virtual Account Id: $virtualAccountId");
-                }
-
-                if (isset($woocommerce->cart) === true)
-                {
-                    $woocommerce->cart->empty_cart();
-                }
-            }
-            else
-            {
-                $this->msg['class'] = 'error';
-                $this->msg['message'] = $errorMessage;
-
-                if ($payexPaymentId)
-                {
-                    $order->add_order_note("Payment Failed. Please check Payex Dashboard. <br/> Payex Id: $payexPaymentId");
-                }
-
-                $order->add_order_note("Transaction Failed: $errorMessage<br/>");
-                $order->update_status('failed');
-            }
-
-            if ($webhook === false)
-            {
-                $this->add_notice($this->msg['message'], $this->msg['class']);
-            }
-        }
-
-        protected function handleErrorCase(& $order)
-        {
-            $orderId = $order->get_order_number();
-
-            $this->msg['class'] = 'error';
-            $this->msg['message'] = $this->getErrorMessage($orderId);
-        }
-
-        /**
-         * Add a woocommerce notification message
-         *
-         * @param string $message Notification message
-         * @param string $type Notification type, default = notice
-         */
-        protected function add_notice($message, $type = 'notice')
-        {
-            global $woocommerce;
-            $type = in_array($type, array('notice','error','success'), true) ? $type : 'notice';
-            // Check for existence of new notification api. Else use previous add_error
-            if (function_exists('wc_add_notice'))
-            {
-                wc_add_notice($message, $type);
-            }
-            else
-            {
-                // Retrocompatibility WooCommerce < 2.1
-                switch ($type)
-                {
-                    case "error" :
-                        $woocommerce->add_error($message);
-                        break;
-                    default :
-                        $woocommerce->add_message($message);
-                        break;
-                }
-            }
+            $updated = $this->query_payex_payment_status($order_id);
+            if (!$updated)
+                wp_schedule_single_event( time() + (3 * MINUTE_IN_SECONDS), 'woocommerce_query_payex_payment_status', array($order_id) );
         }
 
         /**
@@ -809,13 +314,12 @@ function woocommerce_payex_init()
          * @param  string|null $token           Payex token.
          * @return string
          */
-        private function get_payex_payment_link($url, $order, $callback_url, $token = null)
+        private function get_payex_payment_link($url, $order, $callback_url, $token = null, $split_list)
         {
             $order_data = $order->get_data();
             $order_items = $order->get_items();
             $accept_url = $this->get_return_url($order);
             $reject_url = $order->get_checkout_payment_url();
-
             if (!$token)
             {
                 $token = $this->getToken() ['token'];
@@ -858,8 +362,8 @@ function woocommerce_payex_init()
                         "reject_url" => $reject_url,
                         "callback_url" => $callback_url,
                         "items" => $items,
-                        "source" => "wordpress"
-                        //need to add list of split object
+                        "source" => "wordpress",
+                        "splits" => $split_list
                     )
                 ));
 
@@ -888,6 +392,37 @@ function woocommerce_payex_init()
             }
 
             return false;
+        }
+
+        public function create_transaction_from_order($order_id) {
+            $receivers = array();
+            
+            if(MVX_Payex_Checkout_Gateway_Dependencies::mvx_active_check()) {
+                $suborders_list = get_mvx_suborders( $order_id ); 
+                $count = 1;
+                if( $suborders_list ) {
+                    foreach( $suborders_list as $suborder ) {
+                        $vendor = get_mvx_vendor( get_post_field( 'post_author', $suborder->get_id() ) );
+                        $vendor_payment_method = get_user_meta( $vendor->id, '_vendor_payment_mode', true );
+                        $vendor_payex_email = get_the_author_meta( 'user_email', $vendor->id ); 
+                        $vendor_payment_method_check = $vendor_payment_method == 'payex' ? true : false;
+                        $payex_enabled = apply_filters('mvx_payex_enabled', $vendor_payment_method_check);
+                        $vendor_order = mvx_get_order( $suborder->get_id() );
+                        $vendor_commission = round( $vendor_order->get_commission_total( 'edit' ), 2 );
+                        
+                        if ($vendor_commission > 0) {
+                            $receiver = new stdClass(); 
+                            $receiver->amount = round($vendor_commission * 100, 0);
+                            $receiver->split_type = "abs";
+                            $receiver->destination = $vendor_payex_email;
+                            $receiver->type = "platform";
+                            $receiver->description = "Vendor commission fees";
+                            array_push($receivers, $receiver);
+                        }
+                    }
+                }
+            }
+            return $receivers;
         }
 
         /**

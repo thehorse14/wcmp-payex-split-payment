@@ -24,9 +24,9 @@ class MVX_Gateway_Payex extends MVX_Payment_Gateway {
         $this->enabled = 'Enable';
         $this->email = get_mvx_vendor_settings('email', 'payment_payex');
         $this->secret_key = get_mvx_vendor_settings('secret_key', 'payment_payex');
-        if (!empty($this->email) && !empty($this->secret_key) ) {
-            $this->api = new Api($this->email, $this->secret_key);
-        }
+        // if (!empty($this->email) && !empty($this->secret_key) ) {
+        //     $this->api = new Api($this->email, $this->secret_key);
+        // }
     }
     
     public function gateway_logo() { global $MVX; return $MVX->plugin_url . 'assets/images/'.$this->id.'.png'; } //TODO change to payex img
@@ -135,11 +135,11 @@ class MVX_Gateway_Payex extends MVX_Payment_Gateway {
                                 . " Unable to Process #$commission_id Commission!!";
                             $commissionResponse['type'] = 'error';
                         } else {
-                            $final_amount_to_oay = (float) ($amount_to_pay * 100);
+                            $final_amount_to_pay = (float) ($amount_to_pay * 100);
                             //get payment details
                             try {
                                 //TODO change to payex endpoint 
-                                $transfer  = $this->api->payment->fetch($order_transaction_id)->transfer(array('transfers' => [ ['account' => $this->receiver_email, 'amount' => $final_amount_to_oay, 'currency' => $this->currency]]));
+                                $transfer  = $this->api->payment->fetch($order_transaction_id)->transfer(array('transfers' => [ ['account' => $this->receiver_email, 'amount' => $final_amount_to_pay, 'currency' => $this->currency]]));
                                 if ($transfer) {
                                     $response_success['success'] = 'success';
                                     $response_success['commission_id'][] = $commission_id;
