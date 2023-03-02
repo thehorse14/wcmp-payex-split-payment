@@ -1,10 +1,4 @@
 <?php
-// require_once __DIR__.'/../includes/payex-webhook.php';
-// require_once __DIR__.'/../payex-sdk/Payex.php';
-// require_once ABSPATH . 'wp-admin/includes/plugin.php';
-
-// use Payex\Api\Api;
-// use Payex\Api\Errors;
 
 const PAYEX_AUTH_CODE_SUCCESS = '00';
 const PAYEX_AUTH_CODE_PENDING = '09';
@@ -27,7 +21,7 @@ function woocommerce_payex_init()
     class WC_Payex extends WC_Payment_Gateway
     {
         const API_URL = 'https://api.payex.io/';
-        const API_URL_SANDBOX = 'https://beta-payexapi.azurewebsites.net/';
+        const API_URL_SANDBOX = 'https://sandbox-payexapi.azurewebsites.net/';
         const API_GET_TOKEN_PATH = 'api/Auth/Token';
         const API_PAYMENT_FORM = 'api/v1/PaymentIntents';
         const API_MANDATE_FORM = 'api/v1/Mandates';
@@ -49,8 +43,7 @@ function woocommerce_payex_init()
         public $form_fields = array();
 
         public $supports = array(
-            'products',
-            'refunds'
+            'products'
         );
 
         /**
@@ -398,20 +391,19 @@ function woocommerce_payex_init()
             $receivers = array();
             
             if(MVX_Payex_Checkout_Gateway_Dependencies::mvx_active_check()) {
-                $suborders_list = get_mvx_suborders( $order_id ); 
+                $suborders_list = get_wcmp_suborders( $order_id ); 
                 $count = 1;
                 if( $suborders_list ) {
                     foreach( $suborders_list as $suborder ) {
-                        $vendor = get_mvx_vendor( get_post_field( 'post_author', $suborder->get_id() ) );
+                        $vendor = get_wcmp_vendor( get_post_field( 'post_author', $suborder->get_id() ) );
                         $vendor_payment_method = get_user_meta( $vendor->id, '_vendor_payment_mode', true );
                         $vendor_payex_email = get_the_author_meta( 'user_email', $vendor->id ); 
                         $vendor_payment_method_check = $vendor_payment_method == 'payex' ? true : false;
                         $payex_enabled = apply_filters('mvx_payex_enabled', $vendor_payment_method_check);
-                        $vendor_order = mvx_get_order( $suborder->get_id() );
+                        $vendor_order = wcmp_get_order( $suborder->get_id() );
                         $vendor_commission = round( $vendor_order->get_commission_total( 'edit' ), 2 );
-                        
                         if ($vendor_commission > 0) {
-                            $receiver = new stdClass(); 
+                            $receiver = new stdClass();  
                             $receiver->amount = round($vendor_commission * 100, 0);
                             $receiver->split_type = "abs";
                             $receiver->destination = $vendor_payex_email;
