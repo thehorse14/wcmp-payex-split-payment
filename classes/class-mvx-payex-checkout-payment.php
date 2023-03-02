@@ -1,10 +1,4 @@
 <?php
-// require_once __DIR__.'/../includes/payex-webhook.php';
-// require_once __DIR__.'/../payex-sdk/Payex.php';
-// require_once ABSPATH . 'wp-admin/includes/plugin.php';
-
-// use Payex\Api\Api;
-// use Payex\Api\Errors;
 
 const PAYEX_AUTH_CODE_SUCCESS = '00';
 const PAYEX_AUTH_CODE_PENDING = '09';
@@ -27,7 +21,7 @@ function woocommerce_payex_init()
     class WC_Payex extends WC_Payment_Gateway
     {
         const API_URL = 'https://api.payex.io/';
-        const API_URL_SANDBOX = 'https://beta-payexapi.azurewebsites.net/';
+        const API_URL_SANDBOX = 'https://sandbox-payexapi.azurewebsites.net/';
         const API_GET_TOKEN_PATH = 'api/Auth/Token';
         const API_PAYMENT_FORM = 'api/v1/PaymentIntents';
         const API_MANDATE_FORM = 'api/v1/Mandates';
@@ -49,8 +43,7 @@ function woocommerce_payex_init()
         public $form_fields = array();
 
         public $supports = array(
-            'products',
-            'refunds'
+            'products'
         );
 
         /**
