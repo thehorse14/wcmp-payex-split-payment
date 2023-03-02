@@ -80,9 +80,6 @@ class MVX_Payex_Checkout_Gateway {
         $this->load_plugin_textdomain();
 
         if (class_exists('MVX')) {
-            require_once $this->plugin_path . 'classes/class-mvx-gateway-payex.php';
-            $this->connect_payex = new MVX_Gateway_Payex();
-
             require_once $this->plugin_path . 'classes/class-mvx-payex-checkout-gateway-admin.php';
             $this->payex_admin = new MVX_Payex_Checkout_Gateway_Admin();
 
