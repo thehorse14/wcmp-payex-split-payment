@@ -1,13 +1,13 @@
 <?php
 
-const PAYEX_AUTH_CODE_SUCCESS = '00';
-const PAYEX_AUTH_CODE_PENDING = '09';
-const PAYEX_AUTH_CODE_PENDING_2 = '99';
-const DIRECT_DEBIT = 'Direct Debit';
-const AUTO_DEBIT = 'Auto Debit';
-const DIRECT_DEBIT_AUTHORIZATION = 'Mandate - Authorization';
-const DIRECT_DEBIT_APPROVAL = 'Mandate - Approval';
-const AUTO_DEBIT_AUTHORIZATION = 'Auto Debit - Authorization';
+const MVX_PAYEX_AUTH_CODE_SUCCESS = '00';
+const MVX_PAYEX_AUTH_CODE_PENDING = '09';
+const MVX_PAYEX_AUTH_CODE_PENDING_2 = '99';
+const MVX_DIRECT_DEBIT = 'Direct Debit';
+const MVX_AUTO_DEBIT = 'Auto Debit';
+const MVX_DIRECT_DEBIT_AUTHORIZATION = 'Mandate - Authorization';
+const MVX_DIRECT_DEBIT_APPROVAL = 'Mandate - Approval';
+const MVX_AUTO_DEBIT_AUTHORIZATION = 'Auto Debit - Authorization';
 
 add_action('plugins_loaded', 'woocommerce_payex_init', 0);
 
@@ -239,7 +239,7 @@ function woocommerce_payex_init()
                     $payment_link = $this->get_payex_payment_link($url, $order, WC()->api_request_url(get_class($this)) , $token, $split_list);
                 }
                 
-                wp_schedule_single_event( time() + (10 * MINUTE_IN_SECONDS), 'woocommerce_query_payex_payment_status', array( $order_id ) );
+                wp_schedule_single_event( time() + (10 * MINUTE_IN_SECONDS), 'woocommerce_mvx_query_payex_payment_status', array( $order_id ) );
 
                 // Redirect to checkout page on Payex.
                 return array(
@@ -293,9 +293,9 @@ function woocommerce_payex_init()
          */
         public function redirect($order_id)
         {
-            $updated = $this->query_payex_payment_status($order_id);
+            $updated = $this->mvx_query_payex_payment_status($order_id);
             if (!$updated)
-                wp_schedule_single_event( time() + (3 * MINUTE_IN_SECONDS), 'woocommerce_query_payex_payment_status', array($order_id) );
+                wp_schedule_single_event( time() + (3 * MINUTE_IN_SECONDS), 'woocommerce_mvx_query_payex_payment_status', array($order_id) );
         }
 
         /**
@@ -617,7 +617,7 @@ function woocommerce_payex_init()
                     update_post_meta($order_id, 'payex_collection_number', $collection_number);
 
                     // if auto debit, charge immediately
-                    if ($txn_type != DIRECT_DEBIT)
+                    if ($txn_type != MVX_DIRECT_DEBIT)
                     {
                         $renewal_order->add_order_note( 'Auto Debit charge initiated', false );
 
@@ -765,7 +765,7 @@ function woocommerce_payex_init()
          * @param  string      $order           Customer order.
          * @return bool
          */
-        public function query_payex_payment_status($order_id)
+        public function mvx_query_payex_payment_status($order_id)
         {
             $order = wc_get_order($order_id);
             
@@ -827,15 +827,15 @@ function woocommerce_payex_init()
         private function complete_payment($order, $txn_id, $mandate_number, $txn_type, $response_code)
         {
             // verify the payment is successful.
-            if (PAYEX_AUTH_CODE_SUCCESS == $response_code)
+            if (MVX_PAYEX_AUTH_CODE_SUCCESS == $response_code)
             {
-                if ($txn_type == DIRECT_DEBIT_AUTHORIZATION || $txn_type == DIRECT_DEBIT_APPROVAL)
+                if ($txn_type == MVX_DIRECT_DEBIT_AUTHORIZATION || $txn_type == MVX_DIRECT_DEBIT_APPROVAL)
                 {
-                    update_post_meta($order->get_id() , 'payex_txn_type', DIRECT_DEBIT);
+                    update_post_meta($order->get_id() , 'payex_txn_type', MVX_DIRECT_DEBIT);
                 }
-                else if ($txn_type == AUTO_DEBIT_AUTHORIZATION)
+                else if ($txn_type == MVX_AUTO_DEBIT_AUTHORIZATION)
                 {
-                    update_post_meta($order->get_id() , 'payex_txn_type', AUTO_DEBIT);
+                    update_post_meta($order->get_id() , 'payex_txn_type', MVX_AUTO_DEBIT);
                 }
                 else
                 {
@@ -857,15 +857,15 @@ function woocommerce_payex_init()
                     WC_Subscriptions_Manager::activate_subscriptions_for_order($order);
                 }
 
-                if ($txn_type == DIRECT_DEBIT_AUTHORIZATION)
+                if ($txn_type == MVX_DIRECT_DEBIT_AUTHORIZATION)
                 {
                     $order->add_order_note( 'Mandate ('.$mandate_number.') authorized by customer, pending bank approval', false );
                 }
-                else if ($txn_type == DIRECT_DEBIT_APPROVAL)
+                else if ($txn_type == MVX_DIRECT_DEBIT_APPROVAL)
                 {
                     $order->add_order_note( 'Mandate ('.$mandate_number.') approved by bank', false );
                 }
-                else if ($txn_type == DIRECT_DEBIT)
+                else if ($txn_type == MVX_DIRECT_DEBIT)
                 {
                     $order->add_order_note( 'Direct Debit collection approved by bank', false );
                 }
@@ -882,14 +882,14 @@ function woocommerce_payex_init()
     *
     * @param  string      $order           Customer order.
     */
-    function query_payex_payment_status($order_id, $attempts = 0)
+    function mvx_query_payex_payment_status($order_id, $attempts = 0)
     {
         if ($attempts <= 10) 
         {
             $gateway = new WC_PAYEX_GATEWAY();
-            $updated = $gateway->query_payex_payment_status($order_id);
+            $updated = $gateway->mvx_query_payex_payment_status($order_id);
             if (!$updated)
-                wp_schedule_single_event( time() + (30 * MINUTE_IN_SECONDS), 'woocommerce_query_payex_payment_status', array($order_id, ++$attempts) );
+                wp_schedule_single_event( time() + (30 * MINUTE_IN_SECONDS), 'woocommerce_mvx_query_payex_payment_status', array($order_id, ++$attempts) );
         }
     }
 
@@ -907,7 +907,7 @@ function woocommerce_payex_init()
 }
 
 // This is set to a priority of 10
-function payex_webhook_init()
+function mvx_payex_webhook_init()
 {
     $verified = $this->verify_payex_response($_POST); // phpcs:ignore
     if ($verified && isset($_POST['reference_number']) && 
